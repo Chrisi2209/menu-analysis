@@ -6,7 +6,9 @@ import requests
 import datetime as dt
 import pandas as pd
 
-from pdf import get_days, save_pdf, get_soup, get_lunches, get_dessert, get_dinner
+from pdf import get_days, save_pdf, read_date
+from day import get_soup, get_main, get_dessert, get_dinner
+from analyze import get_storage, write_storage
 
 
 def setup_logging(name: str) -> logging.Logger:
@@ -53,7 +55,7 @@ as a command line argument to import the data from it into the analysis.""")
             for day in days:
                 if len(day) > 3:
                     print("soup:   \t", get_soup(day), sep="")
-                    print("lunches:\t", ", ".join(get_lunches(day)), sep="")
+                    print("lunches:\t", ", ".join(get_main(day)), sep="")
                     print("desert: \t", get_dessert(day), sep="")
                     print("dinner: \t", get_dinner(day), sep="")
                     print()
@@ -73,7 +75,9 @@ as a command line argument to import the data from it into the analysis.""")
     print("Request successful")
 
     # save the pdf
-    path = save_pdf(response)
+    path: str = save_pdf(response)
+
+    date: dt.datetime = read_date(path)
 
     days = get_days(path)
 
@@ -81,11 +85,12 @@ as a command line argument to import the data from it into the analysis.""")
     for day in days:
         if len(day) > 3:
             print("soup:   \t", get_soup(day), sep="")
-            print("lunches:\t", ", ".join(get_lunches(day)), sep="")
+            print("lunches:\t", ", ".join(get_main(day)), sep="")
             print("desert: \t", get_dessert(day), sep="")
             print("dinner: \t", get_dinner(day), sep="")
             print()
 
 
 if __name__ == "__main__":
-    main()
+    write_storage(get_storage())
+    # main()
