@@ -29,8 +29,7 @@ def get_storage() -> pd.DataFrame:
     main course is ; seperated
     """
 
-    dtypes: Dict = {"date": "datetime64[ns]",
-                    "soup": str,
+    dtypes: Dict = {"soup": str,
                     "main": str,  # ; seperated
                     "dessert": str,
                     "dinner": str,
@@ -38,7 +37,7 @@ def get_storage() -> pd.DataFrame:
                     }
 
     if os.path.exists(ANALYSIS_FILE_PATH):
-        df: pd.DataFrame = pd.read_excel(ANALYSIS_FILE_PATH)
+        df: pd.DataFrame = pd.read_excel(ANALYSIS_FILE_PATH).set_index("date")
         # df = df.set_index("date")
 
         df = df.astype(dtypes)
@@ -57,7 +56,7 @@ def get_storage() -> pd.DataFrame:
                 "dinner": [],
                 "comment": [],
             }
-        )
+        ).set_index("date")
 
         df = df.astype(dtypes)
 
