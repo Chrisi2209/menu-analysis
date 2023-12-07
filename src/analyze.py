@@ -6,7 +6,8 @@ import datetime as dt
 import pandas as pd
 import shutil
 
-from day import get_soup, get_main, get_dessert, get_dinner
+from logger import logger
+from day import Day
 
 """
 This package includes whole analyzation part of
@@ -37,26 +38,27 @@ def get_storage() -> pd.DataFrame:
                     }
 
     if os.path.exists(ANALYSIS_FILE_PATH):
-        df: pd.DataFrame = pd.read_excel(ANALYSIS_FILE_PATH).set_index("date")
-        # df = df.set_index("date")
+        logger.debug("reading from excel")
+        df: pd.DataFrame = pd.read_excel(ANALYSIS_FILE_PATH, index_col='date')
 
         df = df.astype(dtypes)
 
         return df
 
     else:
+        logger.debug("storage file not existing, creating default")
         print("storage file not existing yet")
         print("creating default DataFrame.")
         df: pd.DataFrame = pd.DataFrame(
             {
-                "date": [],
                 "soup": [],
                 "main": [],
                 "dessert": [],
                 "dinner": [],
                 "comment": [],
-            }
-        ).set_index("date")
+            },
+            index=pd.to_datetime([])
+        )
 
         df = df.astype(dtypes)
 
@@ -69,15 +71,17 @@ def write_storage(df: pd.DataFrame) -> None:
     It will also create a backup file named with its creation 
     time to prevent data loss.
     """
-
     # BACKUP_PATH exists, BACKUP_PATH is a path to a dir
     if not os.path.exists(BACKUP_PATH):
+        logger.debug("backup path not existing, creating dirs to backup path")
         os.makedirs(BACKUP_PATH)
 
     # override old excel file
     with pd.ExcelWriter(ANALYSIS_FILE_PATH, engine='xlsxwriter') as writer:
-        df.to_excel(writer, index=False)
+        logger.debug("writing to storage file...")
+        df.to_excel(writer, index=True, index_label="date")
 
+    logger.debug("creating backup")
     # create backup of new excel file
     shutil.copy(
         ANALYSIS_FILE_PATH,
@@ -88,15 +92,29 @@ def write_storage(df: pd.DataFrame) -> None:
     )
 
 
-def add_day(df: pd.DataFrame, day: List[str], date: dt.datetime):
+def add_day(df: pd.DataFrame, day: Day) -> pd.DataFrame:
     """
     Adds the day as a new row to the dataframe
     """
-    row = {"date": date,
-           "soup": get_soup(day),
-           "main": get_main(day),
-           "dessert": get_dessert(day),
-           "dinner": get_dinner(day),
-           "comment": "empty", }
+    logger.debug(f"adding day: {day}")
+    # Check if the index already exists
+    if day.date not in df.index:
 
-    df = df.append(row)
+        print(f"Adding new day: {day.date.strftime('%d-%m-%Y')}")
+        # Create a new DataFrame with the new row
+        new_row = pd.DataFrame(day.description, index=[day.date])
+
+        # Concatenate the original DataFrame with the new DataFrame
+        df = pd.concat([df, new_row])
+
+        # Sort the DataFrame by the index (if necessary)
+        df = df.sort_index()
+    else:
+        logger.debug(
+            f"date already exists, overriding old entry: {dict(df.loc[day.date])}")
+        print(
+            f"trying to add duplicate date: {day.date.strftime('%d-%m-%Y')}, overriding")
+        # Index already exists, update the existing row
+        df.loc[day.date] = day.description
+
+    return df

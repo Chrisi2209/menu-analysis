@@ -6,31 +6,54 @@ import requests
 import datetime as dt
 import pandas as pd
 
-from pdf import get_days, save_pdf, read_date
-from day import get_soup, get_main, get_dessert, get_dinner
-from analyze import get_storage, write_storage
+from logger import logger
+from pdf import get_days, save_new_pdf, read_date
+from day import Day
+from analyze import get_storage, write_storage, add_day
 
 
-def setup_logging(name: str) -> logging.Logger:
-    path_to_dir = os.path.abspath(os.path.join(
-        os.path.dirname(os.path.abspath(__file__)), "..", "logs"))
-    path_to_log = os.path.abspath(os.path.join(path_to_dir, f"{name}.log"))
+def get_files_in_directory(directory: str) -> List[str]:
+    file_list = []
 
-    if not os.path.exists(path_to_dir):
-        os.mkdir(path_to_dir)
+    # Iterate over all files in the directory
+    for root, dirs, files in os.walk(directory):
+        for file in files:
+            file_path = os.path.join(root, file)
+            file_list.append(file_path)
 
-    file_handler = logging.FileHandler(path_to_log)
-    file_handler.setFormatter(logging.Formatter(
-        "%(levelname)-7s %(processName)s %(threadName)s %(asctime)s %(funcName)s: %(message)s"))
+    return file_list
 
-    logger = logging.getLogger(name)
-    logger.addHandler(file_handler)
-    logger.setLevel(logging.INFO)
 
-    return logger
+def add_to_storage_routine(pdf_path: str):
+    print(f"Importing data from {pdf_path}.")
+    days: List[Day] = get_days(pdf_path)
+
+    logger.info(f"retrieving storage...")
+    df: pd.DataFrame = get_storage()
+
+    logger.info(f"Adding new data")
+    for day in days:
+        df = add_day(df, day)
+
+    logger.info(f"Writing new dataframe to storage")
+    print("writing to storage")
+    write_storage(df)
+
+
+def add_to_df(df: pd.DataFrame, pdf_path: str) -> pd.DataFrame:
+    print(f"Importing data from {pdf_path}.")
+    days: List[Day] = get_days(pdf_path)
+
+    logger.info(f"Adding new data")
+    for day in days:
+        df = add_day(df, day)
+
+    return df
 
 
 def main():
+    logger.info(f"new call: {' '.join(sys.argv)}")
+
     # check for cmd arguments
     if len(sys.argv) == 2:
         if sys.argv[1] in ("-h", "--help"):
@@ -41,56 +64,70 @@ and dinner based on the menus collected so far. Supply a path to an existing men
 as a command line argument to import the data from it into the analysis.""")
 
         elif os.path.exists(sys.argv[1]):
-            path: str = sys.argv[1]
+            if os.path.isfile(sys.argv[1]):
+                # just a file
+                logger.debug(f"importing menu from {sys.argv[1]}")
+                path: str = sys.argv[1]
 
-            if not path.endswith(".pdf"):
-                print("The given path does not have the pdf file extension!")
-                print("Aborting.")
-                return
+                if not path.endswith(".pdf"):
+                    logger.debug(f"given file is no pdf")
+                    print("The given path does not have the pdf file extension!")
+                    print("Aborting.")
+                    return
 
-            print(f"Importing data from {path}.")
-            days: List[List[str]] = get_days(path)
+                add_to_storage_routine(path)
 
-            print()
-            for day in days:
-                if len(day) > 3:
-                    print("soup:   \t", get_soup(day), sep="")
-                    print("lunches:\t", ", ".join(get_main(day)), sep="")
-                    print("desert: \t", get_dessert(day), sep="")
-                    print("dinner: \t", get_dinner(day), sep="")
-                    print()
+            else:
+                # a whole directory was given
+                files_in_dir: List[str] = get_files_in_directory(sys.argv[1])
+
+                print(f"IMPORTING ALL MENUS FROM {sys.argv[1]}")
+                logger.info(f"IMPORTING ALL MENUS FROM {sys.argv[1]}")
+
+                df: pd.DataFrame = get_storage()
+
+                for file in files_in_dir:
+                    logger.debug(f"importing menu from {file}")
+
+                    # check if it is a pdf file
+                    if not file.endswith(".pdf"):
+                        continue
+
+                    df = add_to_df(df, file)
+
+                if df is not None:
+                    logger.info(f"Writing new dataframe to storage")
+                    print("writing to storage")
+                    write_storage(df)
 
         else:
+            logger.info("Wrong arguments")
             print("Argument did not match any. Use -h or --help for help.")
 
         return
 
+    elif len(sys.argv > 2):
+        logger.info("wrong number of arguments.")
+        print("only 1 argument is allowed!")
+
+    logger.info("downloading pdf from web")
     url: str = "https://www.campusm.at/download/339/"
     response = requests.get(url, stream=True)
 
     if response.status_code != 200:
+        logger.warning(f"download failed! url={url}")
         print(f"Request to {url} failed! Aborting.")
         return 1
 
+    logger.debug("Request successful")
     print("Request successful")
 
+    logger.debug("Saving the pdf")
     # save the pdf
-    path: str = save_pdf(response)
+    path: str = save_new_pdf(response)
 
-    date: dt.datetime = read_date(path)
-
-    days = get_days(path)
-
-    print()
-    for day in days:
-        if len(day) > 3:
-            print("soup:   \t", get_soup(day), sep="")
-            print("lunches:\t", ", ".join(get_main(day)), sep="")
-            print("desert: \t", get_dessert(day), sep="")
-            print("dinner: \t", get_dinner(day), sep="")
-            print()
+    df: pd.DataFrame = add_to_storage_routine(path)
 
 
 if __name__ == "__main__":
-    write_storage(get_storage())
-    # main()
+    main()

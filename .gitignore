@@ -1,4 +1,7 @@
 /venv
 **/__pycache__/
 /logs
-stored-menus
+/stored-menus
+/analysis
+missing.txt
+/old_format
